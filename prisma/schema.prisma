@@ -3,7 +3,7 @@
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  url      = env("MANGASYNC_POSTGRES_URL_NON_POOLING")
 }
 
 generator client {
@@ -15,4 +15,24 @@ model Todo {
   createdAt DateTime @default(now())
   text      String
   completed Boolean
+}
+
+model Episode {
+  id        String    @id @default(uuid())
+  title     String
+  status    String    @default("執筆中")
+  createdAt DateTime  @default(now())
+  versions  Version[]
+}
+
+model Version {
+  id        String   @id @default(uuid())
+  episodeId String
+  episode   Episode  @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  number    Int
+  note      String
+  text      String
+  createdAt DateTime @default(now())
+
+  @@unique([episodeId, number])
 }
