@@ -1,0 +1,53 @@
+import type { NextApiRequest, NextApiResponse } from "next";
+import { prisma } from "../../lib/prisma";
+
+const STATUSES = ["執筆中", "確定", "ネーム待ち"];
+
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse
+) {
+  try {
+    if (req.method === "GET") {
+      const episodes = await prisma.episode.findMany({
+        orderBy: { createdAt: "asc" },
+        include: { versions: { orderBy: { number: "desc" } } },
+      });
+      return res.status(200).json(episodes);
+    }
+
+    if (req.method === "POST") {
+      const title = String(req.body?.title ?? "").trim();
+      if (!title) {
+        return res.status(400).json({ error: "タイトルを入力してください" });
+      }
+      const episode = await prisma.episode.create({
+        data: {
+          title,
+          versions: { create: { number: 1, note: "初稿", text: "" } },
+        },
+        include: { versions: { orderBy: { number: "desc" } } },
+      });
+      return res.status(201).json(episode);
+    }
+
+    if (req.method === "PATCH") {
+      const id = String(req.body?.id ?? "");
+      const status = String(req.body?.status ?? "");
+      if (!id || !STATUSES.includes(status)) {
+        return res.status(400).json({ error: "入力が正しくありません" });
+      }
+      const episode = await prisma.episode.update({
+        where: { id },
+        data: { status },
+      });
+      return res.status(200).json(episode);
+    }
+
+    res.setHeader("Allow", "GET, POST, PATCH");
+    return res.status(405).end();
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ error: "サーバーエラーが発生しました" });
+  }
+}
