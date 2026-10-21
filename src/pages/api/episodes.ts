@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { prisma } from "../../lib/prisma";
+import { getUser } from "../../lib/auth";
 
 const STATUSES = ["執筆中", "確定", "ネーム待ち"];
 
@@ -8,8 +9,12 @@ export default async function handler(
   res: NextApiResponse
 ) {
   try {
+    const user = await getUser(req);
+    if (!user) return res.status(401).json({ error: "ログインしてください" });
+
     if (req.method === "GET") {
       const episodes = await prisma.episode.findMany({
+        where: { userId: user.id },
         orderBy: { createdAt: "asc" },
         include: { versions: { orderBy: { number: "desc" } } },
       });
@@ -23,6 +28,7 @@ export default async function handler(
       }
       const episode = await prisma.episode.create({
         data: {
+          userId: user.id,
           title,
           versions: { create: { number: 1, note: "初稿", text: "" } },
         },
@@ -37,11 +43,12 @@ export default async function handler(
       if (!id || !STATUSES.includes(status)) {
         return res.status(400).json({ error: "入力が正しくありません" });
       }
-      const episode = await prisma.episode.update({
-        where: { id },
+      const result = await prisma.episode.updateMany({
+        where: { id, userId: user.id },
         data: { status },
       });
-      return res.status(200).json(episode);
+      if (result.count === 0) return res.status(404).json({ error: "見つかりません" });
+      return res.status(200).json({ id, status });
     }
 
     res.setHeader("Allow", "GET, POST, PATCH");
