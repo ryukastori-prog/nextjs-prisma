@@ -1,5 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import { prisma } from "../../lib/prisma";
+import { getUser } from "../../lib/auth";
 
 export default async function handler(
   req: NextApiRequest,
@@ -11,12 +12,20 @@ export default async function handler(
   }
 
   try {
+    const user = await getUser(req);
+    if (!user) return res.status(401).json({ error: "ログインしてください" });
+
     const episodeId = String(req.body?.episodeId ?? "");
     const note = String(req.body?.note ?? "").trim() || "更新";
     const text = String(req.body?.text ?? "");
     if (!episodeId) {
       return res.status(400).json({ error: "episodeIdが必要です" });
     }
+
+    const episode = await prisma.episode.findFirst({
+      where: { id: episodeId, userId: user.id },
+    });
+    if (!episode) return res.status(404).json({ error: "見つかりません" });
 
     const last = await prisma.version.findFirst({
       where: { episodeId },
