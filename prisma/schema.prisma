@@ -10,19 +10,35 @@ generator client {
   provider = "prisma-client-js"
 }
 
-model Todo {
-  id        String   @id @default(uuid())
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  passwordHash String
+  createdAt    DateTime  @default(now())
+  episodes     Episode[]
+  sessions     Session[]
+}
+
+model Session {
+  id        String   @id
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
   createdAt DateTime @default(now())
-  text      String
-  completed Boolean
+
+  @@index([userId])
 }
 
 model Episode {
   id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   title     String
   status    String    @default("執筆中")
   createdAt DateTime  @default(now())
   versions  Version[]
+
+  @@index([userId])
 }
 
 model Version {
