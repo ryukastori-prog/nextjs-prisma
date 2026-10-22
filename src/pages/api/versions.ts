@@ -6,14 +6,32 @@ export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
 ) {
-  if (req.method !== "POST") {
-    res.setHeader("Allow", "POST");
+  if (req.method !== "POST" && req.method !== "DELETE") {
+    res.setHeader("Allow", "POST, DELETE");
     return res.status(405).end();
   }
 
   try {
     const user = await getUser(req);
     if (!user) return res.status(401).json({ error: "ログインしてください" });
+
+    if (req.method === "DELETE") {
+      const id = String(req.body?.id ?? "");
+      const target = await prisma.version.findFirst({
+        where: { id, episode: { userId: user.id } },
+      });
+      if (!target) return res.status(404).json({ error: "見つかりません" });
+      const count = await prisma.version.count({
+        where: { episodeId: target.episodeId },
+      });
+      if (count <= 1) {
+        return res
+          .status(400)
+          .json({ error: "最後の1つは削除できません" });
+      }
+      await prisma.version.delete({ where: { id } });
+      return res.status(200).json({ ok: true });
+    }
 
     const episodeId = String(req.body?.episodeId ?? "");
     const note = String(req.body?.note ?? "").trim() || "更新";
