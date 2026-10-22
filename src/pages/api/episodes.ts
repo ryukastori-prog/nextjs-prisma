@@ -51,7 +51,17 @@ export default async function handler(
       return res.status(200).json({ id, status });
     }
 
-    res.setHeader("Allow", "GET, POST, PATCH");
+    if (req.method === "DELETE") {
+      const id = String(req.body?.id ?? "");
+      if (!id) return res.status(400).json({ error: "入力が正しくありません" });
+      const result = await prisma.episode.deleteMany({
+        where: { id, userId: user.id },
+      });
+      if (result.count === 0) return res.status(404).json({ error: "見つかりません" });
+      return res.status(200).json({ ok: true });
+    }
+
+    res.setHeader("Allow", "GET, POST, PATCH, DELETE");
     return res.status(405).end();
   } catch (e) {
     console.error(e);
