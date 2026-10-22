@@ -296,7 +296,7 @@ export default function Home() {
         )}
 
         <p className="text-center text-xs text-gray-400 pt-2">
-          🚧 開発中：ログイン機能はまだありません
+          🚧 開発中：機能を順次追加しています
         </p>
       </div>
     </main>
