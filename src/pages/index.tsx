@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import LineDiff from "../components/LineDiff";
 
 type Version = {
   id: string;
@@ -113,6 +114,51 @@ export default function Home() {
     }
   };
 
+  const restoreVersion = async () => {
+    if (!episode || !current || saving) return;
+    setSaving(true);
+    try {
+      await send("/api/versions", "POST", {
+        episodeId: episode.id,
+        note: `v${current.number} に戻す`,
+        text: current.text,
+      });
+      await load(episode.id);
+    } catch {
+      setError("バージョンを戻せませんでした");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteVersion = async () => {
+    if (!episode || !current || saving) return;
+    if (!window.confirm(`v${current.number} を削除します。元に戻せません。よろしいですか？`)) return;
+    setSaving(true);
+    try {
+      await send("/api/versions", "DELETE", { id: current.id });
+      await load(episode.id);
+    } catch {
+      setError("バージョンを削除できませんでした");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteEpisode = async () => {
+    if (!episode || saving) return;
+    if (!window.confirm(`「${episode.title}」とすべてのバージョンを削除します。元に戻せません。よろしいですか？`)) return;
+    setSaving(true);
+    try {
+      await send("/api/episodes", "DELETE", { id: episode.id });
+      await load("");
+    } catch {
+      setError("エピソードを削除できませんでした");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const saveVersion = async () => {
     if (!episode || saving) return;
     setSaving(true);
@@ -209,6 +255,13 @@ export default function Home() {
                   </option>
                 ))}
               </select>
+              <button
+                onClick={deleteEpisode}
+                disabled={saving}
+                className="ml-auto text-xs text-red-600 border border-red-200 rounded-lg px-2 py-1 disabled:opacity-40"
+              >
+                🗑️ エピソード削除
+              </button>
             </section>
 
             <section>
@@ -243,6 +296,26 @@ export default function Home() {
               <p className="whitespace-pre-wrap leading-relaxed text-sm">
                 {current.text || "（本文はまだありません）"}
               </p>
+              <div className="flex gap-2 mt-3">
+                {versionIndex > 0 && (
+                  <button
+                    onClick={restoreVersion}
+                    disabled={saving}
+                    className="text-xs border border-indigo-200 text-indigo-700 rounded-lg px-3 py-1.5 disabled:opacity-40"
+                  >
+                    ↩️ この内容に戻す（新しい版として保存）
+                  </button>
+                )}
+                {episode.versions.length > 1 && (
+                  <button
+                    onClick={deleteVersion}
+                    disabled={saving}
+                    className="text-xs border border-red-200 text-red-600 rounded-lg px-3 py-1.5 disabled:opacity-40"
+                  >
+                    🗑️ この版を削除
+                  </button>
+                )}
+              </div>
             </section>
 
             <section className="bg-white rounded-xl border border-gray-200 p-4 space-y-2">
@@ -272,20 +345,12 @@ export default function Home() {
             <section className="bg-white rounded-xl border border-gray-200 p-4">
               <h3 className="font-bold mb-2">🔍 前バージョンとの比較</h3>
               {previous ? (
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div className="rounded-lg bg-red-50 p-3">
-                    <p className="text-xs font-bold text-red-700 mb-1">
-                      ⬅️ v{previous.number}
-                    </p>
-                    <p className="whitespace-pre-wrap">{previous.text}</p>
-                  </div>
-                  <div className="rounded-lg bg-green-50 p-3">
-                    <p className="text-xs font-bold text-green-700 mb-1">
-                      ➡️ v{current.number}
-                    </p>
-                    <p className="whitespace-pre-wrap">{current.text}</p>
-                  </div>
-                </div>
+                <LineDiff
+                  before={previous.text}
+                  after={current.text}
+                  beforeLabel={`v${previous.number}`}
+                  afterLabel={`v${current.number}`}
+                />
               ) : (
                 <p className="text-sm text-gray-500">
                   🌱 これが最初のバージョンです（比較対象なし）
