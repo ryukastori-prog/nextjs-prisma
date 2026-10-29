@@ -1,4 +1,27 @@
-e)
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+datasource db {
+  provider = "postgresql"
+  url      = env("MANGASYNC_POSTGRES_URL_NON_POOLING")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  createdAt    DateTime  @default(now())
+  episodes     Episode[]
+  sessions     Session[]
+}
+
+model Session {
+  id        String   @id
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   expiresAt DateTime
   createdAt DateTime @default(now())
 
