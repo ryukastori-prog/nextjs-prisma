@@ -3,7 +3,7 @@
 
 datasource db {
   provider = "postgresql"
-  url      = env("MANGASYNC_POSTGRES_URL_NON_POOLING")
+  url      = env("MANGASYNC_DB_URL")
 }
 
 generator client {
