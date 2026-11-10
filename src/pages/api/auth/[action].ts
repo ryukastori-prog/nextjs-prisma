@@ -82,16 +82,23 @@ export default async function handler(
           grant_type: "authorization_code",
         }).toString(),
       });
-      if (!tokenRes.ok) return res.redirect("/?error=login");
+      if (!tokenRes.ok) {
+        console.error("oauth token failed", tokenRes.status, await tokenRes.text());
+        return res.redirect("/?error=login");
+      }
       const token = await tokenRes.json();
 
       const infoRes = await fetch(
         "https://openidconnect.googleapis.com/v1/userinfo",
         { headers: { Authorization: `Bearer ${token.access_token}` } }
       );
-      if (!infoRes.ok) return res.redirect("/?error=login");
+      if (!infoRes.ok) {
+        console.error("oauth userinfo failed", infoRes.status);
+        return res.redirect("/?error=login");
+      }
       const info = await infoRes.json();
       if (!info.email || info.email_verified !== true) {
+        console.error("oauth email not verified", Boolean(info.email), info.email_verified);
         return res.redirect("/?error=login");
       }
 
