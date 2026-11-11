@@ -78,6 +78,7 @@ model Character {
   personality String   @default("")
   appearance  String   @default("")
   memo        String   @default("")
+  relations   String   @default("[]")
   position    Int      @default(0)
   createdAt   DateTime @default(now())
 
