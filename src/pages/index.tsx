@@ -27,7 +27,8 @@ type Episode = {
   outlineVersions: OutlineVersion[];
 };
 
-type Scene = { title: string; body: string };
+type Scene = { title: string; body: string; characterIds: string[] };
+type CharLite = { id: string; name: string; role: string };
 type Outline = {
   synopsis: string;
   ki: string;
@@ -64,9 +65,12 @@ const parseOutline = (raw: string): Outline => {
       ten: str(o.ten),
       ketsu: str(o.ketsu),
       scenes: Array.isArray(o.scenes)
-        ? o.scenes.map((s: { title?: unknown; body?: unknown }) => ({
+        ? o.scenes.map((s: { title?: unknown; body?: unknown; characterIds?: unknown }) => ({
             title: str(s?.title),
             body: str(s?.body),
+            characterIds: Array.isArray(s?.characterIds)
+              ? s.characterIds.map((c: unknown) => str(c))
+              : [],
           }))
         : [],
     };
@@ -104,6 +108,7 @@ export default function Home() {
   const [outlineOpen, setOutlineOpen] = useState(false);
   const [outlineNote, setOutlineNote] = useState("");
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [chars, setChars] = useState<CharLite[]>([]);
 
   const load = async (selectId?: string) => {
     try {
@@ -177,7 +182,14 @@ export default function Home() {
     });
 
   const addScene = () =>
-    setOutline({ ...outline, scenes: [...outline.scenes, { title: "", body: "" }] });
+    setOutline({ ...outline, scenes: [...outline.scenes, { title: "", body: "", characterIds: [] }] });
+
+  const toggleSceneChar = (i: number, id: string) => {
+    const ids = outline.scenes[i].characterIds;
+    setScene(i, {
+      characterIds: ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id],
+    });
+  };
 
   const removeScene = (i: number) =>
     setOutline({ ...outline, scenes: outline.scenes.filter((_, k) => k !== i) });
@@ -229,7 +241,15 @@ export default function Home() {
     });
     outline.scenes.forEach((s, i) => {
       if (s.title.trim() || s.body.trim()) {
-        parts.push(`【シーン${i + 1}${s.title.trim() ? "：" + s.title.trim() : ""}】\n${s.body.trim()}`);
+        const names = s.characterIds
+          .map((id) => chars.find((c) => c.id === id)?.name)
+          .filter(Boolean)
+          .join("、");
+        parts.push(
+          `【シーン${i + 1}${s.title.trim() ? "：" + s.title.trim() : ""}】\n` +
+            (names ? `登場：${names}\n` : "") +
+            s.body.trim()
+        );
       }
     });
     if (parts.length === 0) return;
@@ -478,7 +498,7 @@ export default function Home() {
           </div>
         </section>
 
-        <CharacterPanel />
+        <CharacterPanel onChange={setChars} />
 
         {episode && current && (
           <>
@@ -582,6 +602,27 @@ export default function Home() {
                               ✕
                             </button>
                           </div>
+                          {chars.length > 0 && (
+                            <div className="flex flex-wrap gap-1 items-center">
+                              <span className="text-[11px] text-gray-400">登場</span>
+                              {chars.map((c) => {
+                                const on = s.characterIds.includes(c.id);
+                                return (
+                                  <button
+                                    key={c.id}
+                                    onClick={() => toggleSceneChar(i, c.id)}
+                                    className={`text-[11px] rounded-full border px-2 py-0.5 ${
+                                      on
+                                        ? "bg-indigo-600 text-white border-indigo-600"
+                                        : "bg-white text-gray-500 border-gray-300"
+                                    }`}
+                                  >
+                                    {c.name}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
                           <textarea
                             value={s.body}
                             onChange={(e) => setScene(i, { body: e.target.value })}
