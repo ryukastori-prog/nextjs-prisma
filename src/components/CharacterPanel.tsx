@@ -30,10 +30,21 @@ const roleStyle: Record<string, string> = {
   仲間: "bg-green-100 text-green-800",
 };
 
+export type Appearance = {
+  episodeId: string;
+  episodeTitle: string;
+  no: number;
+  title: string;
+};
+
 export default function CharacterPanel({
   onChange,
+  appearances,
+  onOpenEpisode,
 }: {
   onChange?: (list: { id: string; name: string; role: string }[]) => void;
+  appearances?: Record<string, Appearance[]>;
+  onOpenEpisode?: (episodeId: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [characters, setCharacters] = useState<Character[]>([]);
@@ -194,6 +205,32 @@ export default function CharacterPanel({
                       {!c.personality && !c.appearance && !c.memo && (
                         <p className="text-xs text-gray-400">（詳細はまだありません）</p>
                       )}
+                      <div>
+                        <p className="text-xs font-bold text-gray-500">🎬 登場シーン</p>
+                        {(appearances?.[c.id] ?? []).length === 0 ? (
+                          <p className="text-xs text-gray-400 mt-1">
+                            まだ登場するシーンがありません（📐 構成のシーンで「登場」を選び、保存すると表示されます）
+                          </p>
+                        ) : (
+                          <ul className="mt-1 space-y-1">
+                            {(appearances?.[c.id] ?? []).map((a, k) => (
+                              <li key={k}>
+                                <button
+                                  onClick={() => onOpenEpisode?.(a.episodeId)}
+                                  className="w-full text-left text-xs rounded-lg border border-gray-200 px-2 py-1.5"
+                                >
+                                  <span className="font-medium">{a.episodeTitle}</span>
+                                  <span className="text-gray-500">
+                                    {" "}
+                                    ・シーン{a.no}
+                                    {a.title ? `：${a.title}` : ""}
+                                  </span>
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
                       <div className="flex gap-2">
                         <button
                           onClick={() => setForm({ ...c })}
