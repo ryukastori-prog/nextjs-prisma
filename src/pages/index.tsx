@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import LineDiff from "../components/LineDiff";
+import CharacterPanel from "../components/CharacterPanel";
 
 type Version = {
   id: string;
@@ -9,12 +10,21 @@ type Version = {
   createdAt: string;
 };
 
+type OutlineVersion = {
+  id: string;
+  number: number;
+  note: string;
+  data: string;
+  createdAt: string;
+};
+
 type Episode = {
   id: string;
   title: string;
   status: string;
   outline: string;
   versions: Version[];
+  outlineVersions: OutlineVersion[];
 };
 
 type Scene = { title: string; body: string };
@@ -92,6 +102,8 @@ export default function Home() {
   const [query, setQuery] = useState("");
   const [outline, setOutline] = useState<Outline>(emptyOutline);
   const [outlineOpen, setOutlineOpen] = useState(false);
+  const [outlineNote, setOutlineNote] = useState("");
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   const load = async (selectId?: string) => {
     try {
@@ -120,6 +132,8 @@ export default function Home() {
   useEffect(() => {
     const ep = episodes.find((e) => e.id === episodeId);
     setOutline(parseOutline(ep?.outline ?? ""));
+    setOutlineNote("");
+    setHistoryOpen(false);
   }, [episodeId]);
 
   const episode = episodes.find((e) => e.id === episodeId);
@@ -183,12 +197,22 @@ export default function Home() {
       const saved = await send("/api/episodes", "PATCH", {
         id: episode.id,
         outline,
+        note: outlineNote,
       });
       setEpisodes(
         episodes.map((e) =>
-          e.id === episode.id ? { ...e, outline: saved.outline } : e
+          e.id === episode.id
+            ? {
+                ...e,
+                outline: saved.outline,
+                outlineVersions: saved.version
+                  ? [saved.version, ...e.outlineVersions]
+                  : e.outlineVersions,
+              }
+            : e
         )
       );
+      setOutlineNote("");
       setError("");
     } catch {
       setError("構成を保存できませんでした");
@@ -454,6 +478,8 @@ export default function Home() {
           </div>
         </section>
 
+        <CharacterPanel />
+
         {episode && current && (
           <>
             <section className="flex items-center gap-2 text-sm">
@@ -573,6 +599,12 @@ export default function Home() {
                       ➕ シーンを追加
                     </button>
                   </div>
+                  <input
+                    value={outlineNote}
+                    onChange={(e) => setOutlineNote(e.target.value)}
+                    placeholder="構成の変更メモ（例：転の展開を変更）"
+                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                  />
                   <div className="flex flex-wrap gap-2 pt-1">
                     <button
                       onClick={saveOutline}
@@ -587,6 +619,62 @@ export default function Home() {
                     >
                       ✍️ 構成から本文の下書きを作る
                     </button>
+                  </div>
+
+                  <div className="border-t border-gray-100 pt-2">
+                    <button
+                      onClick={() => setHistoryOpen(!historyOpen)}
+                      className="text-xs font-bold text-gray-500"
+                    >
+                      🕒 構成の履歴（{episode.outlineVersions.length}件）{historyOpen ? "▲" : "▼"}
+                    </button>
+                    {historyOpen && (
+                      <div className="mt-2 space-y-2">
+                        {episode.outlineVersions.length === 0 && (
+                          <p className="text-xs text-gray-400">
+                            まだ履歴がありません。「構成を保存」すると記録されます
+                          </p>
+                        )}
+                        {episode.outlineVersions.map((v, i) => {
+                          const isCurrent =
+                            JSON.stringify(parseOutline(v.data)) === JSON.stringify(outline);
+                          return (
+                            <div
+                              key={v.id}
+                              className="rounded-lg border border-gray-200 p-2 text-xs"
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-bold">
+                                  構成 v{v.number}
+                                  <span className="ml-2 font-normal text-gray-400">
+                                    {formatDate(v.createdAt)}
+                                  </span>
+                                  {i === 0 && (
+                                    <span className="ml-2 text-[10px] text-indigo-600">最新</span>
+                                  )}
+                                </span>
+                                <button
+                                  onClick={() => setOutline(parseOutline(v.data))}
+                                  disabled={isCurrent}
+                                  className="shrink-0 border border-indigo-200 text-indigo-700 rounded-lg px-2 py-1 disabled:opacity-40"
+                                >
+                                  {isCurrent ? "表示中" : "↩️ 読み込む"}
+                                </button>
+                              </div>
+                              <p className="text-gray-500 mt-1">📝 {v.note}</p>
+                              <p className="text-gray-400 mt-1 truncate">
+                                {parseOutline(v.data).synopsis || "（あらすじなし）"}
+                              </p>
+                            </div>
+                          );
+                        })}
+                        {episode.outlineVersions.length > 0 && (
+                          <p className="text-[11px] text-gray-400">
+                            読み込むと入力欄に反映されます。「構成を保存」を押すと、新しい版として記録されます。
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
