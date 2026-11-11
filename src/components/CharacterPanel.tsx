@@ -7,6 +7,23 @@ type Character = {
   personality: string;
   appearance: string;
   memo: string;
+  relations: string;
+};
+
+type Relation = { targetId: string; label: string };
+
+const parseRel = (raw: string): Relation[] => {
+  try {
+    const a = JSON.parse(raw);
+    return Array.isArray(a)
+      ? a.map((r: { targetId?: unknown; label?: unknown }) => ({
+          targetId: String(r?.targetId ?? ""),
+          label: String(r?.label ?? ""),
+        }))
+      : [];
+  } catch {
+    return [];
+  }
 };
 
 type Form = Omit<Character, "id"> & { id: string };
@@ -20,9 +37,10 @@ const emptyForm: Form = {
   personality: "",
   appearance: "",
   memo: "",
+  relations: "[]",
 };
 
-const roleStyle: Record<string, string> = {
+export const roleStyle: Record<string, string> = {
   主人公: "bg-indigo-100 text-indigo-800",
   ヒロイン: "bg-pink-100 text-pink-800",
   ライバル: "bg-orange-100 text-orange-800",
@@ -202,6 +220,36 @@ export default function CharacterPanel({
                           {c.memo}
                         </p>
                       )}
+                      {(() => {
+                        const out = parseRel(c.relations ?? "[]").filter((r) =>
+                          characters.some((o) => o.id === r.targetId)
+                        );
+                        const inc = characters.flatMap((o) =>
+                          parseRel(o.relations ?? "[]")
+                            .filter((r) => r.targetId === c.id)
+                            .map((r) => ({ from: o.name, label: r.label }))
+                        );
+                        if (out.length === 0 && inc.length === 0) return null;
+                        return (
+                          <div>
+                            <p className="text-xs font-bold text-gray-500">🔗 関係性</p>
+                            <ul className="mt-1 space-y-0.5 text-xs">
+                              {out.map((r, k) => (
+                                <li key={"o" + k}>
+                                  → {characters.find((o) => o.id === r.targetId)?.name}
+                                  {r.label && <span className="text-gray-500">：{r.label}</span>}
+                                </li>
+                              ))}
+                              {inc.map((r, k) => (
+                                <li key={"i" + k} className="text-gray-600">
+                                  ← {r.from}から
+                                  {r.label && <span className="text-gray-500">：{r.label}</span>}
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        );
+                      })()}
                       {!c.personality && !c.appearance && !c.memo && (
                         <p className="text-xs text-gray-400">（詳細はまだありません）</p>
                       )}
@@ -288,6 +336,63 @@ export default function CharacterPanel({
               {field("personality", "性格・口調", 2, "例：陽気だが執念深い。語尾は「〜だぜ」")}
               {field("appearance", "外見", 2, "例：長身、褐色の肌、左頬に傷")}
               {field("memo", "メモ（経歴・関係性など）", 3, "例：元保安官。主人公とは旧知の仲")}
+              <div>
+                <span className="text-xs font-bold text-gray-500">🔗 関係性（相手と一言）</span>
+                {(() => {
+                  const rels = parseRel(form.relations);
+                  const others = characters.filter((o) => o.id !== form.id);
+                  const setRels = (next: Relation[]) =>
+                    setForm({ ...form, relations: JSON.stringify(next) });
+                  return (
+                    <div className="mt-1 space-y-1">
+                      {rels.map((r, k) => (
+                        <div key={k} className="flex items-center gap-1">
+                          <select
+                            value={r.targetId}
+                            onChange={(e) =>
+                              setRels(rels.map((x, j) => (j === k ? { ...x, targetId: e.target.value } : x)))
+                            }
+                            className="w-28 shrink-0 rounded border border-gray-300 bg-white px-1 py-1 text-sm"
+                          >
+                            {others.map((o) => (
+                              <option key={o.id} value={o.id}>
+                                {o.name}
+                              </option>
+                            ))}
+                          </select>
+                          <input
+                            value={r.label}
+                            onChange={(e) =>
+                              setRels(rels.map((x, j) => (j === k ? { ...x, label: e.target.value } : x)))
+                            }
+                            placeholder="例：幼なじみ／師弟／宿敵"
+                            className="flex-1 min-w-0 rounded border border-gray-300 px-2 py-1 text-sm"
+                          />
+                          <button
+                            onClick={() => setRels(rels.filter((_, j) => j !== k))}
+                            aria-label="削除"
+                            className="px-2 text-red-500"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                      {others.length === 0 ? (
+                        <p className="text-xs text-gray-400">
+                          関係を付ける相手がいません（キャラクターを2人以上登録すると使えます）
+                        </p>
+                      ) : (
+                        <button
+                          onClick={() => setRels([...rels, { targetId: others[0].id, label: "" }])}
+                          className="text-xs border border-indigo-200 text-indigo-700 rounded-lg px-3 py-1"
+                        >
+                          ➕ 関係を追加
+                        </button>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
               <div className="flex gap-2">
                 <button
                   onClick={save}
