@@ -85,9 +85,12 @@ export default async function handler(
         ketsu: str(o.ketsu),
         scenes: (Array.isArray(o.scenes) ? o.scenes : [])
           .slice(0, 100)
-          .map((s: { title?: unknown; body?: unknown }) => ({
+          .map((s: { title?: unknown; body?: unknown; characterIds?: unknown }) => ({
             title: str(s?.title),
             body: str(s?.body),
+            characterIds: (Array.isArray(s?.characterIds) ? s.characterIds : [])
+              .map((c: unknown) => str(c).slice(0, 64))
+              .slice(0, 30),
           })),
       };
       const outline = JSON.stringify(clean);
