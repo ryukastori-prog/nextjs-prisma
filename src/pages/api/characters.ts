@@ -4,12 +4,32 @@ import { getUser } from "../../lib/auth";
 
 const text = (v: unknown, max: number) => String(v ?? "").trim().slice(0, max);
 
+const cleanRelations = (raw: unknown) =>
+  JSON.stringify(
+    (Array.isArray(raw) ? raw : [])
+      .slice(0, 30)
+      .map((r: { targetId?: unknown; label?: unknown }) => ({
+        targetId: text(r?.targetId, 64),
+        label: text(r?.label, 100),
+      }))
+      .filter((r: { targetId: string }) => r.targetId)
+  );
+
+const parseJson = (raw: unknown): unknown => {
+  try {
+    return JSON.parse(String(raw ?? "[]"));
+  } catch {
+    return [];
+  }
+};
+
 const clean = (body: { [key: string]: unknown } | undefined) => ({
   name: text(body?.name, 100),
   role: text(body?.role, 100),
   personality: text(body?.personality, 5000),
   appearance: text(body?.appearance, 5000),
   memo: text(body?.memo, 5000),
+  relations: cleanRelations(parseJson(body?.relations)),
 });
 
 export default async function handler(
@@ -49,6 +69,7 @@ export default async function handler(
           personality: data.personality,
           appearance: data.appearance,
           memo: data.memo,
+          relations: data.relations,
           position: (last._max.position ?? -1) + 1,
         },
       });
