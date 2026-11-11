@@ -76,6 +76,28 @@ export default async function handler(
       return res.status(201).json(character);
     }
 
+    if (req.method === "PATCH" && Array.isArray(req.body?.order)) {
+      const order: string[] = req.body.order.map((v: unknown) => String(v));
+      const owned = await prisma.character.findMany({
+        where: { userId: user.id },
+        select: { id: true },
+      });
+      const ownedIds = new Set(owned.map((c) => c.id));
+      if (
+        order.length !== ownedIds.size ||
+        new Set(order).size !== order.length ||
+        !order.every((id) => ownedIds.has(id))
+      ) {
+        return res.status(400).json({ error: "入力が正しくありません" });
+      }
+      await prisma.$transaction(
+        order.map((id, i) =>
+          prisma.character.update({ where: { id }, data: { position: i } })
+        )
+      );
+      return res.status(200).json({ ok: true });
+    }
+
     if (req.method === "PATCH") {
       const id = String(req.body?.id ?? "");
       const data = clean(req.body);
