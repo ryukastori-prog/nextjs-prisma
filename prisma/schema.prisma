@@ -16,6 +16,7 @@ model User {
   createdAt    DateTime  @default(now())
   episodes     Episode[]
   sessions     Session[]
+  characters   Character[]
 }
 
 model Session {
@@ -39,6 +40,8 @@ model Episode {
   createdAt DateTime  @default(now())
   versions  Version[]
 
+  outlineVersions OutlineVersion[]
+
   @@index([userId])
 }
 
@@ -52,4 +55,31 @@ model Version {
   createdAt DateTime @default(now())
 
   @@unique([episodeId, number])
+}
+
+model OutlineVersion {
+  id        String   @id @default(uuid())
+  episodeId String
+  episode   Episode  @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  number    Int
+  note      String
+  data      String
+  createdAt DateTime @default(now())
+
+  @@unique([episodeId, number])
+}
+
+model Character {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  role        String   @default("")
+  personality String   @default("")
+  appearance  String   @default("")
+  memo        String   @default("")
+  position    Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
 }
