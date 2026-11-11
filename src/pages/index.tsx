@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import LineDiff from "../components/LineDiff";
-import CharacterPanel, { Appearance } from "../components/CharacterPanel";
+import CharacterPanel, { Appearance, roleStyle } from "../components/CharacterPanel";
 
 type Version = {
   id: string;
@@ -636,11 +636,14 @@ export default function Home() {
                                     key={c.id}
                                     onClick={() => toggleSceneChar(i, c.id)}
                                     className={`text-[11px] rounded-full border px-2 py-0.5 ${
+                                      roleStyle[c.role] ?? "bg-gray-100 text-gray-700"
+                                    } ${
                                       on
-                                        ? "bg-indigo-600 text-white border-indigo-600"
-                                        : "bg-white text-gray-500 border-gray-300"
+                                        ? "font-bold border-current ring-1 ring-current"
+                                        : "opacity-50 border-transparent"
                                     }`}
                                   >
+                                    {on ? "✓ " : ""}
                                     {c.name}
                                   </button>
                                 );
