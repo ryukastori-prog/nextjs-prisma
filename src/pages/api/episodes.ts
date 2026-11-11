@@ -16,7 +16,10 @@ export default async function handler(
       const episodes = await prisma.episode.findMany({
         where: { userId: user.id },
         orderBy: [{ position: "asc" }, { createdAt: "asc" }],
-        include: { versions: { orderBy: { number: "desc" } } },
+        include: {
+          versions: { orderBy: { number: "desc" } },
+          outlineVersions: { orderBy: { number: "desc" }, take: 30 },
+        },
       });
       return res.status(200).json(episodes);
     }
@@ -37,7 +40,10 @@ export default async function handler(
           position: (last._max.position ?? -1) + 1,
           versions: { create: { number: 1, note: "初稿", text: "" } },
         },
-        include: { versions: { orderBy: { number: "desc" } } },
+        include: {
+          versions: { orderBy: { number: "desc" } },
+          outlineVersions: true,
+        },
       });
       return res.status(201).json(episode);
     }
@@ -88,12 +94,32 @@ export default async function handler(
       if (outline.length > 60000) {
         return res.status(400).json({ error: "構成が長すぎます" });
       }
-      const result = await prisma.episode.updateMany({
+      const owned = await prisma.episode.findFirst({
         where: { id, userId: user.id },
-        data: { outline },
+        select: { id: true },
       });
-      if (result.count === 0) return res.status(404).json({ error: "見つかりません" });
-      return res.status(200).json({ id, outline });
+      if (!owned) return res.status(404).json({ error: "見つかりません" });
+
+      const last = await prisma.outlineVersion.findFirst({
+        where: { episodeId: id },
+        orderBy: { number: "desc" },
+      });
+      let version = null;
+      if (!last || last.data !== outline) {
+        const note =
+          String(req.body?.note ?? "").trim().slice(0, 100) ||
+          (last ? "更新" : "初版");
+        version = await prisma.outlineVersion.create({
+          data: {
+            episodeId: id,
+            number: (last?.number ?? 0) + 1,
+            note,
+            data: outline,
+          },
+        });
+      }
+      await prisma.episode.update({ where: { id }, data: { outline } });
+      return res.status(200).json({ id, outline, version });
     }
 
     if (req.method === "PATCH") {
