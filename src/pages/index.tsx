@@ -26,6 +26,10 @@ const statusStyle: Record<string, string> = {
 
 const formatDate = (iso: string) => iso.slice(0, 10);
 
+// 文字数（空白・改行を除く）と、改行を含む文字数
+const countChars = (text: string) => countAll(text.replace(/\s/g, ""));
+const countAll = (text: string) => Array.from(text).length;
+
 export default function Home() {
   const [episodes, setEpisodes] = useState<Episode[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,6 +40,7 @@ export default function Home() {
   const [draftText, setDraftText] = useState("");
   const [draftNote, setDraftNote] = useState("");
   const [saving, setSaving] = useState(false);
+  const [query, setQuery] = useState("");
 
   const load = async (selectId?: string) => {
     try {
@@ -64,6 +69,32 @@ export default function Home() {
   const episode = episodes.find((e) => e.id === episodeId);
   const current = episode?.versions[versionIndex];
   const previous = episode?.versions[versionIndex + 1];
+
+  const keyword = query.trim().toLowerCase();
+  const searching = keyword !== "";
+  const matchesText = (e: Episode) =>
+    e.versions.some((v) => v.text.toLowerCase().includes(keyword));
+  const visibleEpisodes = searching
+    ? episodes.filter(
+        (e) => e.title.toLowerCase().includes(keyword) || matchesText(e)
+      )
+    : episodes;
+
+  const moveEpisode = async (id: string, dir: -1 | 1) => {
+    if (saving || searching) return;
+    const i = episodes.findIndex((e) => e.id === id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= episodes.length) return;
+    const next = [...episodes];
+    [next[i], next[j]] = [next[j], next[i]];
+    setEpisodes(next);
+    try {
+      await send("/api/episodes", "PATCH", { order: next.map((e) => e.id) });
+    } catch {
+      setError("並べ替えを保存できませんでした");
+      await load(episodeId);
+    }
+  };
 
   const selectEpisode = (e: Episode) => {
     setEpisodeId(e.id);
@@ -192,33 +223,95 @@ export default function Home() {
 
         <section>
           <h2 className="text-sm font-bold text-gray-500 mb-2">📖 エピソード</h2>
+          {episodes.length > 0 && (
+            <div className="relative mb-2">
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="🔎 タイトル・本文から検索"
+                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 pr-9 text-sm"
+              />
+              {query && (
+                <button
+                  onClick={() => setQuery("")}
+                  aria-label="検索をクリア"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 px-1"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+          )}
           {loading ? (
             <p className="text-sm text-gray-500">⏳ 読み込み中...</p>
           ) : (
             <div className="space-y-2">
-              {episodes.map((e) => (
-                <button
-                  key={e.id}
-                  onClick={() => selectEpisode(e)}
-                  className={`w-full text-left rounded-xl border p-3 flex items-center justify-between ${
-                    e.id === episodeId
-                      ? "border-indigo-500 bg-white shadow"
-                      : "border-gray-200 bg-white"
-                  }`}
-                >
-                  <span className="font-medium">{e.title}</span>
-                  <span
-                    className={`text-xs px-2 py-1 rounded-full ${
-                      statusStyle[e.status] ?? "bg-gray-100 text-gray-700"
+              {visibleEpisodes.map((e) => {
+                const idx = episodes.findIndex((x) => x.id === e.id);
+                const latest = e.versions[0]?.text ?? "";
+                return (
+                  <div
+                    key={e.id}
+                    className={`flex items-stretch rounded-xl border bg-white ${
+                      e.id === episodeId
+                        ? "border-indigo-500 shadow"
+                        : "border-gray-200"
                     }`}
                   >
-                    {e.status}
-                  </span>
-                </button>
-              ))}
+                    <button
+                      onClick={() => selectEpisode(e)}
+                      className="flex-1 min-w-0 text-left p-3 flex items-center justify-between gap-2"
+                    >
+                      <span className="min-w-0">
+                        <span className="block font-medium truncate">
+                          {e.title}
+                        </span>
+                        <span className="block text-[11px] text-gray-400">
+                          {countChars(latest).toLocaleString()}文字
+                          {searching &&
+                            !e.title.toLowerCase().includes(keyword) &&
+                            " ・本文に一致"}
+                        </span>
+                      </span>
+                      <span
+                        className={`shrink-0 text-xs px-2 py-1 rounded-full ${
+                          statusStyle[e.status] ?? "bg-gray-100 text-gray-700"
+                        }`}
+                      >
+                        {e.status}
+                      </span>
+                    </button>
+                    {!searching && episodes.length > 1 && (
+                      <div className="flex flex-col border-l border-gray-100">
+                        <button
+                          onClick={() => moveEpisode(e.id, -1)}
+                          disabled={idx === 0 || saving}
+                          aria-label="上へ"
+                          className="flex-1 px-3 text-gray-500 disabled:opacity-20"
+                        >
+                          ▲
+                        </button>
+                        <button
+                          onClick={() => moveEpisode(e.id, 1)}
+                          disabled={idx === episodes.length - 1 || saving}
+                          aria-label="下へ"
+                          className="flex-1 px-3 text-gray-500 border-t border-gray-100 disabled:opacity-20"
+                        >
+                          ▼
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
               {episodes.length === 0 && (
                 <p className="text-sm text-gray-500">
                   🌱 まだエピソードがありません。下から追加してください
+                </p>
+              )}
+              {episodes.length > 0 && visibleEpisodes.length === 0 && (
+                <p className="text-sm text-gray-500">
+                  🔎 「{query.trim()}」に一致するエピソードはありません
                 </p>
               )}
             </div>
@@ -296,6 +389,21 @@ export default function Home() {
               <p className="whitespace-pre-wrap leading-relaxed text-sm">
                 {current.text || "（本文はまだありません）"}
               </p>
+              <p className="text-xs text-gray-500 mt-2">
+                🔢 {countChars(current.text).toLocaleString()}文字
+                <span className="text-gray-400">
+                  （改行込み {countAll(current.text).toLocaleString()}）
+                </span>
+                {previous && (() => {
+                  const d = countChars(current.text) - countChars(previous.text);
+                  return (
+                    <span className={d >= 0 ? "text-green-700" : "text-red-600"}>
+                      {" "}・前の版から {d >= 0 ? "+" : ""}
+                      {d.toLocaleString()}
+                    </span>
+                  );
+                })()}
+              </p>
               <div className="flex gap-2 mt-3">
                 {versionIndex > 0 && (
                   <button
@@ -327,6 +435,22 @@ export default function Home() {
                 placeholder="ここに原作の本文を書きます"
                 className="w-full rounded-lg border border-gray-300 p-3 text-sm leading-relaxed"
               />
+              <p className="text-xs text-gray-500">
+                🔢 {countChars(draftText).toLocaleString()}文字
+                <span className="text-gray-400">
+                  （改行込み {countAll(draftText).toLocaleString()}）
+                </span>
+                {(() => {
+                  const base = episode.versions[0]?.text ?? "";
+                  const d = countChars(draftText) - countChars(base);
+                  return d === 0 ? null : (
+                    <span className={d > 0 ? "text-green-700" : "text-red-600"}>
+                      {" "}・最新版から {d > 0 ? "+" : ""}
+                      {d.toLocaleString()}
+                    </span>
+                  );
+                })()}
+              </p>
               <input
                 value={draftNote}
                 onChange={(e) => setDraftNote(e.target.value)}
