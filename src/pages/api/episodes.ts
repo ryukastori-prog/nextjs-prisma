@@ -64,6 +64,38 @@ export default async function handler(
       return res.status(200).json({ ok: true });
     }
 
+    if (req.method === "PATCH" && req.body?.outline !== undefined) {
+      const id = String(req.body?.id ?? "");
+      const o = req.body.outline;
+      if (!id || typeof o !== "object" || o === null) {
+        return res.status(400).json({ error: "入力が正しくありません" });
+      }
+      const str = (v: unknown) => String(v ?? "");
+      const clean = {
+        synopsis: str(o.synopsis),
+        ki: str(o.ki),
+        sho: str(o.sho),
+        ten: str(o.ten),
+        ketsu: str(o.ketsu),
+        scenes: (Array.isArray(o.scenes) ? o.scenes : [])
+          .slice(0, 100)
+          .map((s: { title?: unknown; body?: unknown }) => ({
+            title: str(s?.title),
+            body: str(s?.body),
+          })),
+      };
+      const outline = JSON.stringify(clean);
+      if (outline.length > 60000) {
+        return res.status(400).json({ error: "構成が長すぎます" });
+      }
+      const result = await prisma.episode.updateMany({
+        where: { id, userId: user.id },
+        data: { outline },
+      });
+      if (result.count === 0) return res.status(404).json({ error: "見つかりません" });
+      return res.status(200).json({ id, outline });
+    }
+
     if (req.method === "PATCH") {
       const id = String(req.body?.id ?? "");
       const status = String(req.body?.status ?? "");
