@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import LineDiff from "../components/LineDiff";
-import CharacterPanel from "../components/CharacterPanel";
+import CharacterPanel, { Appearance } from "../components/CharacterPanel";
 
 type Version = {
   id: string;
@@ -144,6 +144,20 @@ export default function Home() {
   const episode = episodes.find((e) => e.id === episodeId);
   const current = episode?.versions[versionIndex];
   const previous = episode?.versions[versionIndex + 1];
+
+  const appearances: Record<string, Appearance[]> = {};
+  episodes.forEach((ep) => {
+    parseOutline(ep.outline).scenes.forEach((s, i) => {
+      s.characterIds.forEach((cid) => {
+        (appearances[cid] = appearances[cid] ?? []).push({
+          episodeId: ep.id,
+          episodeTitle: ep.title,
+          no: i + 1,
+          title: s.title,
+        });
+      });
+    });
+  });
 
   const keyword = query.trim().toLowerCase();
   const searching = keyword !== "";
@@ -498,7 +512,17 @@ export default function Home() {
           </div>
         </section>
 
-        <CharacterPanel onChange={setChars} />
+        <CharacterPanel
+          onChange={setChars}
+          appearances={appearances}
+          onOpenEpisode={(id) => {
+            const ep = episodes.find((e) => e.id === id);
+            if (ep) {
+              selectEpisode(ep);
+              setOutlineOpen(true);
+            }
+          }}
+        />
 
         {episode && current && (
           <>
