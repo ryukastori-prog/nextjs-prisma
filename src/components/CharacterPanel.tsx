@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import CharacterGraph from "./CharacterGraph";
 
 type Character = {
   id: string;
@@ -71,6 +72,7 @@ export default function CharacterPanel({
   const [expandedId, setExpandedId] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [graphOpen, setGraphOpen] = useState(false);
 
   const load = async () => {
     try {
@@ -116,6 +118,23 @@ export default function CharacterPanel({
       setError("キャラクターを保存できませんでした");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const moveChar = async (id: string, dir: -1 | 1) => {
+    if (saving) return;
+    const i = characters.findIndex((c) => c.id === id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= characters.length) return;
+    const next = [...characters];
+    [next[i], next[j]] = [next[j], next[i]];
+    setCharacters(next);
+    onChange?.(next.map((c) => ({ id: c.id, name: c.name, role: c.role })));
+    try {
+      await send("PATCH", { order: next.map((c) => c.id) });
+    } catch {
+      setError("並べ替えを保存できませんでした");
+      await load();
     }
   };
 
@@ -185,9 +204,10 @@ export default function CharacterPanel({
               const expanded = expandedId === c.id;
               return (
                 <div key={c.id} className="rounded-lg border border-gray-200">
+                  <div className="flex items-stretch">
                   <button
                     onClick={() => setExpandedId(expanded ? "" : c.id)}
-                    className="w-full flex items-center justify-between gap-2 p-2 text-left"
+                    className="flex-1 min-w-0 flex items-center justify-between gap-2 p-2 text-left"
                   >
                     <span className="font-medium text-sm truncate">{c.name}</span>
                     {c.role && (
@@ -200,6 +220,27 @@ export default function CharacterPanel({
                       </span>
                     )}
                   </button>
+                  {characters.length > 1 && (
+                    <div className="flex flex-col border-l border-gray-100">
+                      <button
+                        onClick={() => moveChar(c.id, -1)}
+                        disabled={characters[0].id === c.id || saving}
+                        aria-label="上へ"
+                        className="flex-1 px-3 text-gray-500 disabled:opacity-20"
+                      >
+                        ▲
+                      </button>
+                      <button
+                        onClick={() => moveChar(c.id, 1)}
+                        disabled={characters[characters.length - 1].id === c.id || saving}
+                        aria-label="下へ"
+                        className="flex-1 px-3 text-gray-500 border-t border-gray-100 disabled:opacity-20"
+                      >
+                        ▼
+                      </button>
+                    </div>
+                  )}
+                  </div>
                   {expanded && (
                     <div className="px-2 pb-2 space-y-2 text-sm">
                       {c.personality && (
@@ -300,6 +341,22 @@ export default function CharacterPanel({
               );
             })}
           </div>
+
+          {characters.length > 1 && (
+            <div>
+              <button
+                onClick={() => setGraphOpen(!graphOpen)}
+                className="text-xs font-bold text-gray-500"
+              >
+                🕸️ 人物相関図 {graphOpen ? "▲" : "▼"}
+              </button>
+              {graphOpen && (
+                <div className="mt-2 rounded-lg border border-gray-200 p-2">
+                  <CharacterGraph characters={characters} />
+                </div>
+              )}
+            </div>
+          )}
 
           {form ? (
             <div className="rounded-lg border border-indigo-200 bg-indigo-50/30 p-3 space-y-2">
