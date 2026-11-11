@@ -15,7 +15,7 @@ export default async function handler(
     if (req.method === "GET") {
       const episodes = await prisma.episode.findMany({
         where: { userId: user.id },
-        orderBy: { createdAt: "asc" },
+        orderBy: [{ position: "asc" }, { createdAt: "asc" }],
         include: { versions: { orderBy: { number: "desc" } } },
       });
       return res.status(200).json(episodes);
@@ -26,15 +26,42 @@ export default async function handler(
       if (!title) {
         return res.status(400).json({ error: "タイトルを入力してください" });
       }
+      const last = await prisma.episode.aggregate({
+        where: { userId: user.id },
+        _max: { position: true },
+      });
       const episode = await prisma.episode.create({
         data: {
           userId: user.id,
           title,
+          position: (last._max.position ?? -1) + 1,
           versions: { create: { number: 1, note: "初稿", text: "" } },
         },
         include: { versions: { orderBy: { number: "desc" } } },
       });
       return res.status(201).json(episode);
+    }
+
+    if (req.method === "PATCH" && Array.isArray(req.body?.order)) {
+      const order: string[] = req.body.order.map((v: unknown) => String(v));
+      const owned = await prisma.episode.findMany({
+        where: { userId: user.id },
+        select: { id: true },
+      });
+      const ownedIds = new Set(owned.map((e) => e.id));
+      if (
+        order.length !== ownedIds.size ||
+        new Set(order).size !== order.length ||
+        !order.every((id) => ownedIds.has(id))
+      ) {
+        return res.status(400).json({ error: "入力が正しくありません" });
+      }
+      await prisma.$transaction(
+        order.map((id, i) =>
+          prisma.episode.update({ where: { id }, data: { position: i } })
+        )
+      );
+      return res.status(200).json({ ok: true });
     }
 
     if (req.method === "PATCH") {
