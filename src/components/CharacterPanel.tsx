@@ -30,7 +30,11 @@ const roleStyle: Record<string, string> = {
   仲間: "bg-green-100 text-green-800",
 };
 
-export default function CharacterPanel() {
+export default function CharacterPanel({
+  onChange,
+}: {
+  onChange?: (list: { id: string; name: string; role: string }[]) => void;
+}) {
   const [open, setOpen] = useState(false);
   const [characters, setCharacters] = useState<Character[]>([]);
   const [loaded, setLoaded] = useState(false);
@@ -43,7 +47,9 @@ export default function CharacterPanel() {
     try {
       const res = await fetch("/api/characters");
       if (!res.ok) throw new Error();
-      setCharacters(await res.json());
+      const list: Character[] = await res.json();
+      setCharacters(list);
+      onChange?.(list.map((c) => ({ id: c.id, name: c.name, role: c.role })));
       setError("");
     } catch {
       setError("キャラクターを読み込めませんでした");
