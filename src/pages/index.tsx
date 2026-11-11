@@ -13,7 +13,56 @@ type Episode = {
   id: string;
   title: string;
   status: string;
+  outline: string;
   versions: Version[];
+};
+
+type Scene = { title: string; body: string };
+type Outline = {
+  synopsis: string;
+  ki: string;
+  sho: string;
+  ten: string;
+  ketsu: string;
+  scenes: Scene[];
+};
+
+const emptyOutline: Outline = {
+  synopsis: "",
+  ki: "",
+  sho: "",
+  ten: "",
+  ketsu: "",
+  scenes: [],
+};
+
+const ACTS: { key: "ki" | "sho" | "ten" | "ketsu"; label: string; hint: string }[] = [
+  { key: "ki", label: "起", hint: "導入：場面・人物・状況の提示" },
+  { key: "sho", label: "承", hint: "展開：事態が動き出す" },
+  { key: "ten", label: "転", hint: "転換：山場・予想外の出来事" },
+  { key: "ketsu", label: "結", hint: "結末：決着と次への引き" },
+];
+
+const parseOutline = (raw: string): Outline => {
+  try {
+    const o = JSON.parse(raw);
+    const str = (v: unknown) => String(v ?? "");
+    return {
+      synopsis: str(o.synopsis),
+      ki: str(o.ki),
+      sho: str(o.sho),
+      ten: str(o.ten),
+      ketsu: str(o.ketsu),
+      scenes: Array.isArray(o.scenes)
+        ? o.scenes.map((s: { title?: unknown; body?: unknown }) => ({
+            title: str(s?.title),
+            body: str(s?.body),
+          }))
+        : [],
+    };
+  } catch {
+    return emptyOutline;
+  }
 };
 
 const STATUSES = ["執筆中", "確定", "ネーム待ち"];
@@ -41,6 +90,8 @@ export default function Home() {
   const [draftNote, setDraftNote] = useState("");
   const [saving, setSaving] = useState(false);
   const [query, setQuery] = useState("");
+  const [outline, setOutline] = useState<Outline>(emptyOutline);
+  const [outlineOpen, setOutlineOpen] = useState(false);
 
   const load = async (selectId?: string) => {
     try {
@@ -65,6 +116,11 @@ export default function Home() {
   useEffect(() => {
     load();
   }, []);
+
+  useEffect(() => {
+    const ep = episodes.find((e) => e.id === episodeId);
+    setOutline(parseOutline(ep?.outline ?? ""));
+  }, [episodeId]);
 
   const episode = episodes.find((e) => e.id === episodeId);
   const current = episode?.versions[versionIndex];
@@ -94,6 +150,71 @@ export default function Home() {
       setError("並べ替えを保存できませんでした");
       await load(episodeId);
     }
+  };
+
+  const outlineDirty =
+    !!episode &&
+    JSON.stringify(outline) !== JSON.stringify(parseOutline(episode.outline));
+
+  const setScene = (i: number, patch: Partial<Scene>) =>
+    setOutline({
+      ...outline,
+      scenes: outline.scenes.map((s, k) => (k === i ? { ...s, ...patch } : s)),
+    });
+
+  const addScene = () =>
+    setOutline({ ...outline, scenes: [...outline.scenes, { title: "", body: "" }] });
+
+  const removeScene = (i: number) =>
+    setOutline({ ...outline, scenes: outline.scenes.filter((_, k) => k !== i) });
+
+  const moveScene = (i: number, dir: -1 | 1) => {
+    const j = i + dir;
+    if (j < 0 || j >= outline.scenes.length) return;
+    const scenes = [...outline.scenes];
+    [scenes[i], scenes[j]] = [scenes[j], scenes[i]];
+    setOutline({ ...outline, scenes });
+  };
+
+  const saveOutline = async () => {
+    if (!episode || saving) return;
+    setSaving(true);
+    try {
+      const saved = await send("/api/episodes", "PATCH", {
+        id: episode.id,
+        outline,
+      });
+      setEpisodes(
+        episodes.map((e) =>
+          e.id === episode.id ? { ...e, outline: saved.outline } : e
+        )
+      );
+      setError("");
+    } catch {
+      setError("構成を保存できませんでした");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const insertOutlineToDraft = () => {
+    const parts: string[] = [];
+    if (outline.synopsis.trim()) parts.push(`【あらすじ】\n${outline.synopsis.trim()}`);
+    ACTS.forEach((a) => {
+      if (outline[a.key].trim()) parts.push(`【${a.label}】\n${outline[a.key].trim()}`);
+    });
+    outline.scenes.forEach((s, i) => {
+      if (s.title.trim() || s.body.trim()) {
+        parts.push(`【シーン${i + 1}${s.title.trim() ? "：" + s.title.trim() : ""}】\n${s.body.trim()}`);
+      }
+    });
+    if (parts.length === 0) return;
+    if (
+      draftText.trim() &&
+      !window.confirm("入力欄の本文を、構成から作った下書きで置き換えます。よろしいですか？")
+    )
+      return;
+    setDraftText(parts.join("\n\n") + "\n");
   };
 
   const selectEpisode = (e: Episode) => {
@@ -355,6 +476,120 @@ export default function Home() {
               >
                 🗑️ エピソード削除
               </button>
+            </section>
+
+            <section className="bg-white rounded-xl border border-gray-200">
+              <button
+                onClick={() => setOutlineOpen(!outlineOpen)}
+                className="w-full flex items-center justify-between p-3 text-left"
+              >
+                <span className="font-bold text-sm">
+                  📐 シナリオ構成
+                  {outlineDirty && (
+                    <span className="ml-2 text-[11px] font-normal text-orange-600">
+                      未保存
+                    </span>
+                  )}
+                </span>
+                <span className="text-gray-400 text-sm">{outlineOpen ? "▲" : "▼"}</span>
+              </button>
+              {outlineOpen && (
+                <div className="px-3 pb-3 space-y-3 border-t border-gray-100 pt-3">
+                  <label className="block">
+                    <span className="text-xs font-bold text-gray-500">📝 あらすじ</span>
+                    <textarea
+                      value={outline.synopsis}
+                      onChange={(e) => setOutline({ ...outline, synopsis: e.target.value })}
+                      rows={3}
+                      placeholder="この話の概要を数行で"
+                      className="mt-1 w-full rounded-lg border border-gray-300 p-2 text-sm"
+                    />
+                  </label>
+                  {ACTS.map((a) => (
+                    <label key={a.key} className="block">
+                      <span className="text-xs font-bold text-gray-500">
+                        【{a.label}】
+                        <span className="font-normal text-gray-400"> {a.hint}</span>
+                      </span>
+                      <textarea
+                        value={outline[a.key]}
+                        onChange={(e) => setOutline({ ...outline, [a.key]: e.target.value })}
+                        rows={2}
+                        className="mt-1 w-full rounded-lg border border-gray-300 p-2 text-sm"
+                      />
+                    </label>
+                  ))}
+                  <div>
+                    <p className="text-xs font-bold text-gray-500 mb-1">🎬 シーン割り</p>
+                    <div className="space-y-2">
+                      {outline.scenes.map((s, i) => (
+                        <div key={i} className="rounded-lg border border-gray-200 p-2 space-y-1">
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs text-gray-400 w-5">{i + 1}</span>
+                            <input
+                              value={s.title}
+                              onChange={(e) => setScene(i, { title: e.target.value })}
+                              placeholder="シーン名（例：廃屋での再会）"
+                              className="flex-1 min-w-0 rounded border border-gray-300 px-2 py-1 text-sm"
+                            />
+                            <button
+                              onClick={() => moveScene(i, -1)}
+                              disabled={i === 0}
+                              aria-label="上へ"
+                              className="px-2 text-gray-500 disabled:opacity-20"
+                            >
+                              ▲
+                            </button>
+                            <button
+                              onClick={() => moveScene(i, 1)}
+                              disabled={i === outline.scenes.length - 1}
+                              aria-label="下へ"
+                              className="px-2 text-gray-500 disabled:opacity-20"
+                            >
+                              ▼
+                            </button>
+                            <button
+                              onClick={() => removeScene(i)}
+                              aria-label="削除"
+                              className="px-2 text-red-500"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                          <textarea
+                            value={s.body}
+                            onChange={(e) => setScene(i, { body: e.target.value })}
+                            rows={2}
+                            placeholder="場所・登場人物・出来事・セリフの案"
+                            className="w-full rounded border border-gray-300 p-2 text-sm"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    <button
+                      onClick={addScene}
+                      className="mt-2 text-xs border border-indigo-200 text-indigo-700 rounded-lg px-3 py-1.5"
+                    >
+                      ➕ シーンを追加
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    <button
+                      onClick={saveOutline}
+                      disabled={saving || !outlineDirty}
+                      className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm disabled:opacity-40"
+                    >
+                      💾 構成を保存
+                    </button>
+                    <button
+                      onClick={insertOutlineToDraft}
+                      className="rounded-lg border border-indigo-200 text-indigo-700 px-4 py-2 text-sm"
+                    >
+                      ✍️ 構成から本文の下書きを作る
+                    </button>
+                  </div>
+                </div>
+              )}
             </section>
 
             <section>
