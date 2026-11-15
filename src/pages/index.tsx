@@ -159,6 +159,12 @@ export default function Home() {
     });
   });
 
+  const episodeCharIds = Array.from(
+    new Set(
+      parseOutline(episode?.outline ?? "").scenes.flatMap((s) => s.characterIds)
+    )
+  );
+
   const keyword = query.trim().toLowerCase();
   const searching = keyword !== "";
   const matchesText = (e: Episode) =>
@@ -515,6 +521,8 @@ export default function Home() {
         <CharacterPanel
           onChange={setChars}
           appearances={appearances}
+          episodeTitle={episode?.title}
+          episodeCharacterIds={episodeCharIds}
           onOpenEpisode={(id) => {
             const ep = episodes.find((e) => e.id === id);
             if (ep) {
