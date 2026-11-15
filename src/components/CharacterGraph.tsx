@@ -25,9 +25,15 @@ const parseRel = (raw: string): { targetId: string; label: string }[] => {
 export default function CharacterGraph({
   characters,
   onSelect,
+  showAll,
+  selectedId,
+  secondId,
 }: {
   characters: Node[];
   onSelect?: (id: string) => void;
+  showAll?: boolean;
+  selectedId?: string;
+  secondId?: string;
 }) {
   const byId = new Map(characters.map((c) => [c.id, c]));
   const edges: { from: string; to: string; label: string }[] = [];
@@ -40,7 +46,7 @@ export default function CharacterGraph({
   );
   const ids = characters
     .map((c) => c.id)
-    .filter((id) => edges.some((e) => e.from === id || e.to === id));
+    .filter((id) => showAll || edges.some((e) => e.from === id || e.to === id));
 
   if (ids.length === 0) {
     return (
@@ -124,6 +130,16 @@ export default function CharacterGraph({
             onClick={() => onSelect?.(id)}
             style={{ cursor: onSelect ? "pointer" : "default" }}
           >
+            {(id === selectedId || id === secondId) && (
+              <circle
+                cx={p.x}
+                cy={p.y}
+                r={27}
+                fill="none"
+                stroke={id === selectedId ? "#4f46e5" : "#f59e0b"}
+                strokeWidth={3}
+              />
+            )}
             <circle cx={p.x} cy={p.y} r={22} fill={COLORS[c.role] ?? "#9ca3af"} />
             <text x={p.x} y={p.y + 4} fontSize={11} textAnchor="middle" fill="#fff" fontWeight="bold">
               {Array.from(c.name).slice(0, 3).join("")}
