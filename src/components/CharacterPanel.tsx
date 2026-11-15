@@ -78,6 +78,10 @@ export default function CharacterPanel({
   const [error, setError] = useState("");
   const [graphOpen, setGraphOpen] = useState(false);
   const [graphScope, setGraphScope] = useState<"all" | "episode">("all");
+  const [linkMode, setLinkMode] = useState(false);
+  const [linkFrom, setLinkFrom] = useState("");
+  const [linkTo, setLinkTo] = useState("");
+  const [linkLabel, setLinkLabel] = useState("");
 
   const load = async () => {
     try {
@@ -123,6 +127,86 @@ export default function CharacterPanel({
       setError("キャラクターを保存できませんでした");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const resetLink = () => {
+    setLinkFrom("");
+    setLinkTo("");
+    setLinkLabel("");
+  };
+
+  const onGraphSelect = (id: string) => {
+    if (!linkMode) {
+      openCharacter(id);
+      return;
+    }
+    if (!linkFrom) setLinkFrom(id);
+    else if (id === linkFrom) resetLink();
+    else setLinkTo(id);
+  };
+
+  const addRelation = async () => {
+    const from = characters.find((c) => c.id === linkFrom);
+    if (!from || !linkTo || saving) return;
+    setSaving(true);
+    try {
+      const next = [...parseRel(from.relations ?? "[]"), { targetId: linkTo, label: linkLabel.trim() }];
+      await send("PATCH", { ...from, relations: JSON.stringify(next) });
+      resetLink();
+      await load();
+    } catch {
+      setError("関係を保存できませんでした");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const saveImage = async () => {
+    try {
+      const svg = document.querySelector("#rel-graph svg");
+      if (!svg) return;
+      const clone = svg.cloneNode(true) as SVGSVGElement;
+      clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+      clone.setAttribute("width", "800");
+      clone.setAttribute("height", "780");
+      clone.setAttribute("font-family", "sans-serif");
+      const bg = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      bg.setAttribute("width", "400");
+      bg.setAttribute("height", "390");
+      bg.setAttribute("fill", "#ffffff");
+      clone.insertBefore(bg, clone.firstChild);
+      const xml = new XMLSerializer().serializeToString(clone);
+      const img = new Image();
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error());
+        img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(xml);
+      });
+      const canvas = document.createElement("canvas");
+      canvas.width = 800;
+      canvas.height = 780;
+      canvas.getContext("2d")?.drawImage(img, 0, 0, 800, 780);
+      const blob: Blob | null = await new Promise((r) => canvas.toBlob(r, "image/png"));
+      if (!blob) throw new Error();
+      const file = new File([blob], "relations.png", { type: "image/png" });
+      const nav = navigator as Navigator & { canShare?: (d: { files: File[] }) => boolean };
+      if (nav.canShare?.({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file] });
+        } catch {
+          /* 共有をキャンセルした場合 */
+        }
+        return;
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "relations.png";
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+    } catch {
+      setError("画像を作成できませんでした");
     }
   };
 
@@ -363,7 +447,7 @@ export default function CharacterPanel({
                 🕸️ 人物相関図 {graphOpen ? "▲" : "▼"}
               </button>
               {graphOpen && (
-                <div className="mt-2 rounded-lg border border-gray-200 p-2">
+                <div id="rel-graph" className="mt-2 rounded-lg border border-gray-200 p-2">
                   {episodeTitle !== undefined && (
                     <div className="flex gap-1 mb-2 text-xs">
                       {(["all", "episode"] as const).map((k) => (
@@ -395,14 +479,82 @@ export default function CharacterPanel({
                           characters={characters.filter((c) =>
                             (episodeCharacterIds ?? []).includes(c.id)
                           )}
-                          onSelect={openCharacter}
+                          onSelect={onGraphSelect}
+                          showAll={linkMode}
+                          selectedId={linkFrom}
+                          secondId={linkTo}
                         />
                       </>
                     )
                   ) : (
-                    <CharacterGraph characters={characters} onSelect={openCharacter} />
+                    <CharacterGraph
+                      characters={characters}
+                      onSelect={onGraphSelect}
+                      showAll={linkMode}
+                      selectedId={linkFrom}
+                      secondId={linkTo}
+                    />
                   )}
-                  <p className="text-[11px] text-gray-400 mt-1">丸をタップすると詳細が開きます</p>
+                  {linkMode ? (
+                    <div className="mt-2 space-y-1 rounded-lg bg-indigo-50 p-2 text-xs">
+                      {!linkFrom && <p>① 関係の「元」になるキャラの丸をタップ</p>}
+                      {linkFrom && !linkTo && (
+                        <p>
+                          「{characters.find((c) => c.id === linkFrom)?.name}」から → ② 相手の丸をタップ
+                        </p>
+                      )}
+                      {linkFrom && linkTo && (
+                        <>
+                          <p>
+                            {characters.find((c) => c.id === linkFrom)?.name} →{" "}
+                            {characters.find((c) => c.id === linkTo)?.name}
+                          </p>
+                          <div className="flex gap-1">
+                            <input
+                              value={linkLabel}
+                              onChange={(e) => setLinkLabel(e.target.value)}
+                              placeholder="関係（例：幼なじみ／師弟／宿敵）"
+                              className="flex-1 min-w-0 rounded border border-gray-300 px-2 py-1 text-sm"
+                            />
+                            <button
+                              onClick={addRelation}
+                              disabled={saving}
+                              className="rounded bg-indigo-600 text-white px-3 py-1 disabled:opacity-40"
+                            >
+                              追加
+                            </button>
+                          </div>
+                        </>
+                      )}
+                      <button
+                        onClick={() => {
+                          setLinkMode(false);
+                          resetLink();
+                        }}
+                        className="text-gray-500 underline"
+                      >
+                        関係追加モードを終える
+                      </button>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-gray-400 mt-1">丸をタップすると詳細が開きます</p>
+                  )}
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {!linkMode && (
+                      <button
+                        onClick={() => setLinkMode(true)}
+                        className="text-xs border border-indigo-200 text-indigo-700 rounded-lg px-3 py-1.5"
+                      >
+                        ➕ 図で関係を追加
+                      </button>
+                    )}
+                    <button
+                      onClick={saveImage}
+                      className="text-xs border border-gray-300 text-gray-700 rounded-lg px-3 py-1.5"
+                    >
+                      🖼️ 画像として保存
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
