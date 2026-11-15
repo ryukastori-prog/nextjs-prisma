@@ -60,10 +60,14 @@ export default function CharacterPanel({
   onChange,
   appearances,
   onOpenEpisode,
+  episodeTitle,
+  episodeCharacterIds,
 }: {
   onChange?: (list: { id: string; name: string; role: string }[]) => void;
   appearances?: Record<string, Appearance[]>;
   onOpenEpisode?: (episodeId: string) => void;
+  episodeTitle?: string;
+  episodeCharacterIds?: string[];
 }) {
   const [open, setOpen] = useState(false);
   const [characters, setCharacters] = useState<Character[]>([]);
@@ -73,6 +77,7 @@ export default function CharacterPanel({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [graphOpen, setGraphOpen] = useState(false);
+  const [graphScope, setGraphScope] = useState<"all" | "episode">("all");
 
   const load = async () => {
     try {
@@ -119,6 +124,13 @@ export default function CharacterPanel({
     } finally {
       setSaving(false);
     }
+  };
+
+  const openCharacter = (id: string) => {
+    setExpandedId(id);
+    setTimeout(() => {
+      document.getElementById(`char-${id}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 50);
   };
 
   const moveChar = async (id: string, dir: -1 | 1) => {
@@ -203,7 +215,7 @@ export default function CharacterPanel({
             {characters.map((c) => {
               const expanded = expandedId === c.id;
               return (
-                <div key={c.id} className="rounded-lg border border-gray-200">
+                <div key={c.id} id={`char-${c.id}`} className="rounded-lg border border-gray-200">
                   <div className="flex items-stretch">
                   <button
                     onClick={() => setExpandedId(expanded ? "" : c.id)}
@@ -352,7 +364,45 @@ export default function CharacterPanel({
               </button>
               {graphOpen && (
                 <div className="mt-2 rounded-lg border border-gray-200 p-2">
-                  <CharacterGraph characters={characters} />
+                  {episodeTitle !== undefined && (
+                    <div className="flex gap-1 mb-2 text-xs">
+                      {(["all", "episode"] as const).map((k) => (
+                        <button
+                          key={k}
+                          onClick={() => setGraphScope(k)}
+                          className={`rounded-full border px-3 py-1 ${
+                            graphScope === k
+                              ? "bg-indigo-600 text-white border-indigo-600"
+                              : "bg-white text-gray-600 border-gray-300"
+                          }`}
+                        >
+                          {k === "all" ? "全体" : "このエピソード"}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {graphScope === "episode" && episodeTitle !== undefined ? (
+                    (episodeCharacterIds ?? []).length === 0 ? (
+                      <p className="text-xs text-gray-400">
+                        「{episodeTitle}」のシーンに登場キャラがまだ設定されていません（📐 構成で「登場」を選び、保存してください）
+                      </p>
+                    ) : (
+                      <>
+                        <p className="text-[11px] text-gray-400 mb-1">
+                          「{episodeTitle}」の登場キャラ同士の関係
+                        </p>
+                        <CharacterGraph
+                          characters={characters.filter((c) =>
+                            (episodeCharacterIds ?? []).includes(c.id)
+                          )}
+                          onSelect={openCharacter}
+                        />
+                      </>
+                    )
+                  ) : (
+                    <CharacterGraph characters={characters} onSelect={openCharacter} />
+                  )}
+                  <p className="text-[11px] text-gray-400 mt-1">丸をタップすると詳細が開きます</p>
                 </div>
               )}
             </div>
