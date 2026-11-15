@@ -22,7 +22,13 @@ const parseRel = (raw: string): { targetId: string; label: string }[] => {
   }
 };
 
-export default function CharacterGraph({ characters }: { characters: Node[] }) {
+export default function CharacterGraph({
+  characters,
+  onSelect,
+}: {
+  characters: Node[];
+  onSelect?: (id: string) => void;
+}) {
   const byId = new Map(characters.map((c) => [c.id, c]));
   const edges: { from: string; to: string; label: string }[] = [];
   characters.forEach((c) =>
@@ -113,7 +119,11 @@ export default function CharacterGraph({ characters }: { characters: Node[] }) {
         const c = byId.get(id)!;
         const p = pos.get(id)!;
         return (
-          <g key={id}>
+          <g
+            key={id}
+            onClick={() => onSelect?.(id)}
+            style={{ cursor: onSelect ? "pointer" : "default" }}
+          >
             <circle cx={p.x} cy={p.y} r={22} fill={COLORS[c.role] ?? "#9ca3af"} />
             <text x={p.x} y={p.y + 4} fontSize={11} textAnchor="middle" fill="#fff" fontWeight="bold">
               {Array.from(c.name).slice(0, 3).join("")}
