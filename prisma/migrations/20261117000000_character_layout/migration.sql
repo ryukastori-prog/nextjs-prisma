@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "Character" ADD COLUMN "layoutX" DOUBLE PRECISION,
+ADD COLUMN "layoutY" DOUBLE PRECISION;
