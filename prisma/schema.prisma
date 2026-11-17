@@ -79,6 +79,8 @@ model Character {
   appearance  String   @default("")
   memo        String   @default("")
   relations   String   @default("[]")
+  layoutX     Float?
+  layoutY     Float?
   position    Int      @default(0)
   createdAt   DateTime @default(now())
 
