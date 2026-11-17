@@ -1,4 +1,15 @@
-type Node = { id: string; name: string; role: string; relations: string };
+import { useRef, useState } from "react";
+
+type Node = {
+  id: string;
+  name: string;
+  role: string;
+  relations: string;
+  layoutX?: number | null;
+  layoutY?: number | null;
+};
+
+export type EdgeRef = { from: string; idx: number };
 
 const COLORS: Record<string, string> = {
   主人公: "#6366f1",
@@ -7,6 +18,9 @@ const COLORS: Record<string, string> = {
   敵役: "#ef4444",
   仲間: "#22c55e",
 };
+
+const W = 400;
+const H = 390;
 
 const parseRel = (raw: string): { targetId: string; label: string }[] => {
   try {
@@ -28,19 +42,30 @@ export default function CharacterGraph({
   showAll,
   selectedId,
   secondId,
+  onEdgeSelect,
+  selectedEdge,
+  draggable,
+  onMove,
 }: {
   characters: Node[];
   onSelect?: (id: string) => void;
   showAll?: boolean;
   selectedId?: string;
   secondId?: string;
+  onEdgeSelect?: (from: string, idx: number) => void;
+  selectedEdge?: EdgeRef | null;
+  draggable?: boolean;
+  onMove?: (id: string, x: number, y: number) => void;
 }) {
+  const svgRef = useRef<SVGSVGElement>(null);
+  const [drag, setDrag] = useState<{ id: string; x: number; y: number } | null>(null);
+
   const byId = new Map(characters.map((c) => [c.id, c]));
-  const edges: { from: string; to: string; label: string }[] = [];
+  const edges: { from: string; to: string; label: string; idx: number }[] = [];
   characters.forEach((c) =>
-    parseRel(c.relations ?? "[]").forEach((r) => {
+    parseRel(c.relations ?? "[]").forEach((r, idx) => {
       if (byId.has(r.targetId) && r.targetId !== c.id) {
-        edges.push({ from: c.id, to: r.targetId, label: r.label });
+        edges.push({ from: c.id, to: r.targetId, label: r.label, idx });
       }
     })
   );
@@ -61,11 +86,44 @@ export default function CharacterGraph({
   const pos = new Map<string, { x: number; y: number }>();
   ids.forEach((id, i) => {
     const a = -Math.PI / 2 + (2 * Math.PI * i) / n;
-    pos.set(id, { x: 200 + R * Math.cos(a), y: 190 + R * Math.sin(a) });
+    const c = byId.get(id)!;
+    const saved =
+      typeof c.layoutX === "number" && typeof c.layoutY === "number"
+        ? { x: c.layoutX, y: c.layoutY }
+        : null;
+    pos.set(id, saved ?? { x: 200 + R * Math.cos(a), y: 190 + R * Math.sin(a) });
   });
+  if (drag && pos.has(drag.id)) pos.set(drag.id, { x: drag.x, y: drag.y });
+
+  const toSvg = (e: React.PointerEvent) => {
+    const rect = svgRef.current!.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) * W) / rect.width;
+    const y = ((e.clientY - rect.top) * H) / rect.height;
+    return {
+      x: Math.min(W - 25, Math.max(25, x)),
+      y: Math.min(H - 35, Math.max(25, y)),
+    };
+  };
 
   return (
-    <svg viewBox="0 0 400 390" className="w-full h-auto" role="img" aria-label="人物相関図">
+    <svg
+      ref={svgRef}
+      viewBox={`0 0 ${W} ${H}`}
+      className="w-full h-auto"
+      style={{ touchAction: draggable ? "none" : "auto" }}
+      role="img"
+      aria-label="人物相関図"
+      onPointerMove={(e) => {
+        if (drag) setDrag({ id: drag.id, ...toSvg(e) });
+      }}
+      onPointerUp={() => {
+        if (drag) {
+          onMove?.(drag.id, drag.x, drag.y);
+          setDrag(null);
+        }
+      }}
+      onPointerCancel={() => setDrag(null)}
+    >
       <defs>
         <marker
           id="rel-arrow"
@@ -80,8 +138,9 @@ export default function CharacterGraph({
         </marker>
       </defs>
       {edges.map((e, i) => {
-        const p1 = pos.get(e.from)!;
-        const p2 = pos.get(e.to)!;
+        const p1 = pos.get(e.from);
+        const p2 = pos.get(e.to);
+        if (!p1 || !p2) return null;
         const dx = p2.x - p1.x;
         const dy = p2.y - p1.y;
         const len = Math.hypot(dx, dy) || 1;
@@ -95,22 +154,31 @@ export default function CharacterGraph({
         };
         const lx = 0.25 * s.x + 0.5 * c.x + 0.25 * t.x;
         const ly = 0.25 * s.y + 0.5 * c.y + 0.25 * t.y;
+        const d = `M${s.x},${s.y} Q${c.x},${c.y} ${t.x},${t.y}`;
+        const sel = selectedEdge?.from === e.from && selectedEdge?.idx === e.idx;
         return (
-          <g key={i}>
+          <g
+            key={i}
+            onClick={() => onEdgeSelect?.(e.from, e.idx)}
+            style={{ cursor: onEdgeSelect ? "pointer" : "default" }}
+          >
             <path
-              d={`M${s.x},${s.y} Q${c.x},${c.y} ${t.x},${t.y}`}
+              d={d}
               fill="none"
-              stroke="#9ca3af"
-              strokeWidth={1.5}
+              stroke={sel ? "#4f46e5" : "#9ca3af"}
+              strokeWidth={sel ? 2.5 : 1.5}
               markerEnd="url(#rel-arrow)"
             />
+            {onEdgeSelect && (
+              <path d={d} fill="none" stroke="transparent" strokeWidth={16} />
+            )}
             {e.label && (
               <text
                 x={lx}
                 y={ly}
                 fontSize={10}
                 textAnchor="middle"
-                fill="#374151"
+                fill={sel ? "#4338ca" : "#374151"}
                 stroke="#fff"
                 strokeWidth={3}
                 paintOrder="stroke"
@@ -127,8 +195,16 @@ export default function CharacterGraph({
         return (
           <g
             key={id}
-            onClick={() => onSelect?.(id)}
-            style={{ cursor: onSelect ? "pointer" : "default" }}
+            onClick={() => {
+              if (!draggable) onSelect?.(id);
+            }}
+            onPointerDown={(e) => {
+              if (!draggable) return;
+              e.preventDefault();
+              svgRef.current?.setPointerCapture(e.pointerId);
+              setDrag({ id, ...toSvg(e) });
+            }}
+            style={{ cursor: draggable ? "grab" : onSelect ? "pointer" : "default" }}
           >
             {(id === selectedId || id === secondId) && (
               <circle
