@@ -9,6 +9,8 @@ type Character = {
   appearance: string;
   memo: string;
   relations: string;
+  layoutX?: number | null;
+  layoutY?: number | null;
 };
 
 type Relation = { targetId: string; label: string };
@@ -82,6 +84,9 @@ export default function CharacterPanel({
   const [linkFrom, setLinkFrom] = useState("");
   const [linkTo, setLinkTo] = useState("");
   const [linkLabel, setLinkLabel] = useState("");
+  const [moveMode, setMoveMode] = useState(false);
+  const [editEdge, setEditEdge] = useState<{ from: string; idx: number } | null>(null);
+  const [editLabel, setEditLabel] = useState("");
 
   const load = async () => {
     try {
@@ -125,6 +130,58 @@ export default function CharacterPanel({
       await load();
     } catch {
       setError("キャラクターを保存できませんでした");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const selectEdge = (from: string, idx: number) => {
+    const c = characters.find((x) => x.id === from);
+    const rel = c ? parseRel(c.relations ?? "[]")[idx] : undefined;
+    if (!rel) return;
+    setEditEdge({ from, idx });
+    setEditLabel(rel.label);
+  };
+
+  const saveEdge = async (remove: boolean) => {
+    if (!editEdge || saving) return;
+    const from = characters.find((c) => c.id === editEdge.from);
+    if (!from) return;
+    if (remove && !window.confirm("この関係を削除します。よろしいですか？")) return;
+    setSaving(true);
+    try {
+      const rels = parseRel(from.relations ?? "[]");
+      const next = remove
+        ? rels.filter((_, i) => i !== editEdge.idx)
+        : rels.map((r, i) => (i === editEdge.idx ? { ...r, label: editLabel.trim() } : r));
+      await send("PATCH", { ...from, relations: JSON.stringify(next) });
+      setEditEdge(null);
+      await load();
+    } catch {
+      setError("関係を保存できませんでした");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const onNodeMove = async (id: string, x: number, y: number) => {
+    setCharacters((prev) => prev.map((c) => (c.id === id ? { ...c, layoutX: x, layoutY: y } : c)));
+    try {
+      await send("PATCH", { layout: [{ id, x, y }] });
+    } catch {
+      setError("配置を保存できませんでした");
+      await load();
+    }
+  };
+
+  const resetLayout = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      await send("PATCH", { layout: characters.map((c) => ({ id: c.id, x: null, y: null })) });
+      await load();
+    } catch {
+      setError("配置をリセットできませんでした");
     } finally {
       setSaving(false);
     }
@@ -480,9 +537,13 @@ export default function CharacterPanel({
                             (episodeCharacterIds ?? []).includes(c.id)
                           )}
                           onSelect={onGraphSelect}
-                          showAll={linkMode}
+                          showAll={linkMode || moveMode}
                           selectedId={linkFrom}
                           secondId={linkTo}
+                      draggable={moveMode}
+                      onMove={onNodeMove}
+                      selectedEdge={editEdge}
+                      onEdgeSelect={linkMode || moveMode ? undefined : selectEdge}
                         />
                       </>
                     )
@@ -490,9 +551,13 @@ export default function CharacterPanel({
                     <CharacterGraph
                       characters={characters}
                       onSelect={onGraphSelect}
-                      showAll={linkMode}
+                      showAll={linkMode || moveMode}
                       selectedId={linkFrom}
                       secondId={linkTo}
+                      draggable={moveMode}
+                      onMove={onNodeMove}
+                      selectedEdge={editEdge}
+                      onEdgeSelect={linkMode || moveMode ? undefined : selectEdge}
                     />
                   )}
                   {linkMode ? (
@@ -536,16 +601,85 @@ export default function CharacterPanel({
                         関係追加モードを終える
                       </button>
                     </div>
+                  ) : moveMode ? (
+                    <div className="mt-2 space-y-1 rounded-lg bg-amber-50 p-2 text-xs">
+                      <p>丸をドラッグして好きな位置に動かせます（位置は自動で保存されます）</p>
+                      <div className="flex gap-3">
+                        <button onClick={resetLayout} disabled={saving} className="text-gray-600 underline">
+                          ↺ 配置をリセット
+                        </button>
+                        <button onClick={() => setMoveMode(false)} className="text-gray-500 underline">
+                          動かすモードを終える
+                        </button>
+                      </div>
+                    </div>
                   ) : (
-                    <p className="text-[11px] text-gray-400 mt-1">丸をタップすると詳細が開きます</p>
+                    <p className="text-[11px] text-gray-400 mt-1">
+                      丸をタップで詳細、矢印やラベルをタップで関係の編集・削除
+                    </p>
                   )}
+                  {editEdge && !linkMode && !moveMode && (() => {
+                    const from = characters.find((c) => c.id === editEdge.from);
+                    const rel = from ? parseRel(from.relations ?? "[]")[editEdge.idx] : undefined;
+                    if (!from || !rel) return null;
+                    const to = characters.find((c) => c.id === rel.targetId);
+                    return (
+                      <div className="mt-2 space-y-1 rounded-lg bg-indigo-50 p-2 text-xs">
+                        <p>
+                          ✏️ {from.name} → {to?.name}
+                        </p>
+                        <div className="flex gap-1">
+                          <input
+                            value={editLabel}
+                            onChange={(e) => setEditLabel(e.target.value)}
+                            placeholder="関係（例：幼なじみ）"
+                            className="flex-1 min-w-0 rounded border border-gray-300 px-2 py-1 text-sm"
+                          />
+                          <button
+                            onClick={() => saveEdge(false)}
+                            disabled={saving}
+                            className="rounded bg-indigo-600 text-white px-3 py-1 disabled:opacity-40"
+                          >
+                            保存
+                          </button>
+                          <button
+                            onClick={() => saveEdge(true)}
+                            disabled={saving}
+                            className="rounded border border-red-200 text-red-600 px-3 py-1 disabled:opacity-40"
+                          >
+                            削除
+                          </button>
+                        </div>
+                        <button onClick={() => setEditEdge(null)} className="text-gray-500 underline">
+                          閉じる
+                        </button>
+                      </div>
+                    );
+                  })()}
                   <div className="flex flex-wrap gap-2 mt-2">
                     {!linkMode && (
                       <button
-                        onClick={() => setLinkMode(true)}
+                        onClick={() => {
+                          setLinkMode(true);
+                          setMoveMode(false);
+                          setEditEdge(null);
+                        }}
                         className="text-xs border border-indigo-200 text-indigo-700 rounded-lg px-3 py-1.5"
                       >
                         ➕ 図で関係を追加
+                      </button>
+                    )}
+                    {!moveMode && (
+                      <button
+                        onClick={() => {
+                          setMoveMode(true);
+                          setLinkMode(false);
+                          resetLink();
+                          setEditEdge(null);
+                        }}
+                        className="text-xs border border-amber-300 text-amber-700 rounded-lg px-3 py-1.5"
+                      >
+                        ✋ 丸を動かす
                       </button>
                     )}
                     <button
