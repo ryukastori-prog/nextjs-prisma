@@ -98,6 +98,37 @@ export default async function handler(
       return res.status(200).json({ ok: true });
     }
 
+    if (req.method === "PATCH" && Array.isArray(req.body?.layout)) {
+      const items: { id: string; x: number | null; y: number | null }[] = [];
+      for (const it of req.body.layout.slice(0, 200)) {
+        const id = String(it?.id ?? "");
+        const x = it?.x === null ? null : Number(it?.x);
+        const y = it?.y === null ? null : Number(it?.y);
+        if (!id) continue;
+        if ((x !== null && !Number.isFinite(x)) || (y !== null && !Number.isFinite(y))) continue;
+        items.push({
+          id,
+          x: x === null ? null : Math.min(400, Math.max(0, x)),
+          y: y === null ? null : Math.min(400, Math.max(0, y)),
+        });
+      }
+      const owned = await prisma.character.findMany({
+        where: { userId: user.id },
+        select: { id: true },
+      });
+      const ownedIds = new Set(owned.map((c) => c.id));
+      const valid = items.filter((it) => ownedIds.has(it.id));
+      await prisma.$transaction(
+        valid.map((it) =>
+          prisma.character.update({
+            where: { id: it.id },
+            data: { layoutX: it.x, layoutY: it.y },
+          })
+        )
+      );
+      return res.status(200).json({ ok: true });
+    }
+
     if (req.method === "PATCH") {
       const id = String(req.body?.id ?? "");
       const data = clean(req.body);
