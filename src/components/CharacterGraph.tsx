@@ -7,6 +7,7 @@ type Node = {
   relations: string;
   layoutX?: number | null;
   layoutY?: number | null;
+  avatar?: string;
 };
 
 export type EdgeRef = { from: string; idx: number };
@@ -217,9 +218,26 @@ export default function CharacterGraph({
               />
             )}
             <circle cx={p.x} cy={p.y} r={22} fill={COLORS[c.role] ?? "#9ca3af"} />
-            <text x={p.x} y={p.y + 4} fontSize={11} textAnchor="middle" fill="#fff" fontWeight="bold">
-              {Array.from(c.name).slice(0, 3).join("")}
-            </text>
+            {c.avatar ? (
+              <>
+                <clipPath id={`clip-${id}`}>
+                  <circle cx={p.x} cy={p.y} r={19} />
+                </clipPath>
+                <image
+                  href={c.avatar}
+                  x={p.x - 19}
+                  y={p.y - 19}
+                  width={38}
+                  height={38}
+                  preserveAspectRatio="xMidYMid slice"
+                  clipPath={`url(#clip-${id})`}
+                />
+              </>
+            ) : (
+              <text x={p.x} y={p.y + 4} fontSize={11} textAnchor="middle" fill="#fff" fontWeight="bold">
+                {Array.from(c.name).slice(0, 3).join("")}
+              </text>
+            )}
             <text x={p.x} y={p.y + 38} fontSize={11} textAnchor="middle" fill="#111827">
               {Array.from(c.name).slice(0, 8).join("")}
             </text>
