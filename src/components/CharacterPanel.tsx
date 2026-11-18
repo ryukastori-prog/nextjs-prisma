@@ -11,6 +11,7 @@ type Character = {
   relations: string;
   layoutX?: number | null;
   layoutY?: number | null;
+  avatar?: string;
 };
 
 type Relation = { targetId: string; label: string };
@@ -41,6 +42,7 @@ const emptyForm: Form = {
   appearance: "",
   memo: "",
   relations: "[]",
+  avatar: "",
 };
 
 export const roleStyle: Record<string, string> = {
@@ -184,6 +186,32 @@ export default function CharacterPanel({
       setError("配置をリセットできませんでした");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const pickAvatar = async (file: File | undefined) => {
+    if (!file || !form) return;
+    try {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error());
+        img.src = url;
+      });
+      const size = 128;
+      const canvas = document.createElement("canvas");
+      canvas.width = size;
+      canvas.height = size;
+      const side = Math.min(img.width, img.height);
+      canvas
+        .getContext("2d")
+        ?.drawImage(img, (img.width - side) / 2, (img.height - side) / 2, side, side, 0, 0, size, size);
+      URL.revokeObjectURL(url);
+      const data = canvas.toDataURL("image/jpeg", 0.8);
+      setForm((f) => (f ? { ...f, avatar: data } : f));
+    } catch {
+      setError("画像を読み込めませんでした");
     }
   };
 
@@ -362,7 +390,13 @@ export default function CharacterPanel({
                     onClick={() => setExpandedId(expanded ? "" : c.id)}
                     className="flex-1 min-w-0 flex items-center justify-between gap-2 p-2 text-left"
                   >
-                    <span className="font-medium text-sm truncate">{c.name}</span>
+                    <span className="flex items-center gap-2 min-w-0">
+                      {c.avatar && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={c.avatar} alt="" className="h-7 w-7 shrink-0 rounded-full object-cover" />
+                      )}
+                      <span className="font-medium text-sm truncate">{c.name}</span>
+                    </span>
                     {c.role && (
                       <span
                         className={`shrink-0 text-[11px] px-2 py-0.5 rounded-full ${
@@ -699,6 +733,38 @@ export default function CharacterPanel({
               <p className="text-xs font-bold text-indigo-700">
                 {form.id ? "✏️ キャラクターを編集" : "➕ 新しいキャラクター"}
               </p>
+              <div className="flex items-center gap-3">
+                {form.avatar ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={form.avatar} alt="" className="h-14 w-14 rounded-full object-cover border border-gray-200" />
+                ) : (
+                  <div className="h-14 w-14 rounded-full bg-gray-100 border border-gray-200 flex items-center justify-center text-gray-400 text-xs">
+                    画像なし
+                  </div>
+                )}
+                <div className="flex flex-col gap-1 text-xs">
+                  <label className="cursor-pointer rounded-lg border border-indigo-200 text-indigo-700 px-3 py-1.5 text-center">
+                    📷 画像を選ぶ
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        pickAvatar(e.target.files?.[0]);
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+                  {form.avatar && (
+                    <button
+                      onClick={() => setForm({ ...form, avatar: "" })}
+                      className="text-gray-500 underline"
+                    >
+                      画像を外す
+                    </button>
+                  )}
+                </div>
+              </div>
               <label className="block">
                 <span className="text-xs font-bold text-gray-500">名前</span>
                 <input
