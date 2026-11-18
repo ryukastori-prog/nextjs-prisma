@@ -81,6 +81,7 @@ model Character {
   relations   String   @default("[]")
   layoutX     Float?
   layoutY     Float?
+  avatar      String   @default("")
   position    Int      @default(0)
   createdAt   DateTime @default(now())
 
