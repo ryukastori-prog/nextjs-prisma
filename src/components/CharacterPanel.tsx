@@ -67,7 +67,7 @@ export default function CharacterPanel({
   episodeTitle,
   episodeCharacterIds,
 }: {
-  onChange?: (list: { id: string; name: string; role: string }[]) => void;
+  onChange?: (list: { id: string; name: string; role: string; avatar?: string }[]) => void;
   appearances?: Record<string, Appearance[]>;
   onOpenEpisode?: (episodeId: string) => void;
   episodeTitle?: string;
@@ -96,7 +96,7 @@ export default function CharacterPanel({
       if (!res.ok) throw new Error();
       const list: Character[] = await res.json();
       setCharacters(list);
-      onChange?.(list.map((c) => ({ id: c.id, name: c.name, role: c.role })));
+      onChange?.(list.map((c) => ({ id: c.id, name: c.name, role: c.role, avatar: c.avatar })));
       setError("");
     } catch {
       setError("キャラクターを読み込めませんでした");
@@ -310,7 +310,7 @@ export default function CharacterPanel({
     const next = [...characters];
     [next[i], next[j]] = [next[j], next[i]];
     setCharacters(next);
-    onChange?.(next.map((c) => ({ id: c.id, name: c.name, role: c.role })));
+    onChange?.(next.map((c) => ({ id: c.id, name: c.name, role: c.role, avatar: c.avatar })));
     try {
       await send("PATCH", { order: next.map((c) => c.id) });
     } catch {
@@ -430,6 +430,10 @@ export default function CharacterPanel({
                   </div>
                   {expanded && (
                     <div className="px-2 pb-2 space-y-2 text-sm">
+                      {c.avatar && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={c.avatar} alt={c.name} className="h-24 w-24 rounded-xl object-cover border border-gray-200" />
+                      )}
                       {c.personality && (
                         <p className="whitespace-pre-wrap">
                           <span className="text-xs font-bold text-gray-500">性格・口調　</span>
