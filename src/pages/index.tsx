@@ -28,7 +28,7 @@ type Episode = {
 };
 
 type Scene = { title: string; body: string; characterIds: string[] };
-type CharLite = { id: string; name: string; role: string };
+type CharLite = { id: string; name: string; role: string; avatar?: string };
 type Outline = {
   synopsis: string;
   ki: string;
@@ -555,6 +555,35 @@ export default function Home() {
                 🗑️ エピソード削除
               </button>
             </section>
+
+            {episodeCharIds.length > 0 && (
+              <section className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-bold text-gray-500">👥 登場キャラ</span>
+                {episodeCharIds
+                  .map((id) => chars.find((c) => c.id === id))
+                  .filter((c): c is CharLite => !!c)
+                  .map((c) => (
+                    <span
+                      key={c.id}
+                      className="flex items-center gap-1 rounded-full bg-white border border-gray-200 pr-2 text-xs"
+                    >
+                      {c.avatar ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={c.avatar} alt="" className="h-6 w-6 rounded-full object-cover" />
+                      ) : (
+                        <span
+                          className={`h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                            roleStyle[c.role] ?? "bg-gray-100 text-gray-700"
+                          }`}
+                        >
+                          {Array.from(c.name)[0]}
+                        </span>
+                      )}
+                      {c.name}
+                    </span>
+                  ))}
+              </section>
+            )}
 
             <section className="bg-white rounded-xl border border-gray-200">
               <button
