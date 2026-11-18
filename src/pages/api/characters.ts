@@ -23,6 +23,11 @@ const parseJson = (raw: unknown): unknown => {
   }
 };
 
+const cleanAvatar = (v: unknown) => {
+  const s = typeof v === "string" ? v : "";
+  return s.length <= 60000 && /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(s) ? s : "";
+};
+
 const clean = (body: { [key: string]: unknown } | undefined) => ({
   name: text(body?.name, 100),
   role: text(body?.role, 100),
@@ -30,6 +35,7 @@ const clean = (body: { [key: string]: unknown } | undefined) => ({
   appearance: text(body?.appearance, 5000),
   memo: text(body?.memo, 5000),
   relations: cleanRelations(parseJson(body?.relations)),
+  avatar: cleanAvatar(body?.avatar),
 });
 
 export default async function handler(
@@ -70,6 +76,7 @@ export default async function handler(
           appearance: data.appearance,
           memo: data.memo,
           relations: data.relations,
+          avatar: data.avatar,
           position: (last._max.position ?? -1) + 1,
         },
       });
